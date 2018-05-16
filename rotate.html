@@ -1,0 +1,133 @@
+<html>
+<head>
+<style>
+img
+{
+    filter:progid:DXImageTransform.Microsoft.Matrix(sizingMethod='auto expand');
+    position: absolute;
+}
+div
+{
+    postion: relative;
+}
+</style>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script>
+</head>
+<body>
+    <img id="aDiv" src="pics/halo-dude.jpg"/>
+    <div id="angle"></div>
+<script>
+(function() { // Defining Rotatable class
+    var window = this;
+    
+    function initRotatable(rot, img, initAng) {
+        var useCanvas = !img.filters,
+            diag = Math.sqrt(img.width * img.width + img.height * img.height);
+        
+        rot.element = (function getElement(img, diag, useCanvas) {
+            if(useCanvas) {
+                var cnv = $("<canvas>");
+                cnv.attr("width", Math.round(diag))
+                   .attr("height", Math.round(diag));
+                cnv[0].getContext("2d").translate(diag / 2,  diag / 2);
+                $(img).replaceWith(cnv);
+                return cnv[0];
+            }
+            
+            $(img)
+                .css("position", "absolute")
+                .wrap("<div></div>")
+                .parent("div")
+                .css({ position: "relative",
+                       width: "100%", 
+                       height: "100%" })
+                .wrap("<div></div>")
+                .parent("div")
+                .css({ width: Math.round(diag),
+                       height: Math.round(diag) });
+            
+            return $(img).parent("div").parent("div")[0];
+        })(img, diag, useCanvas);
+        rot.rotate = (function(img, diag, useCanvas) {
+            if (useCanvas) {
+                var c = rot.element.getContext("2d");
+                return function rotate(rad) {
+                    c.clearRect(-diag / 2, -diag / 2, diag, diag);
+                    c.save();
+                    c.rotate(rad);
+                    c.drawImage(img, -img.width / 2, -img.height / 2);
+                    c.restore();
+                };
+            }
+            
+            var $img = $(img),
+                imgStyle = img.style,
+                filterItem = img.filters.item(0);
+            return function rotate(rad) {
+                var costheta = Math.cos(rad),
+                    sintheta = Math.sin(rad);
+                filterItem.M11 = costheta;
+                filterItem.M12 = -sintheta;
+                filterItem.M21 = sintheta;
+                filterItem.M22 = costheta;
+                
+                imgStyle.left = (diag - $img.width()) / 2;
+                imgStyle.top = (diag - $img.height()) / 2;
+            };
+        })(img, diag, useCanvas);
+        
+        rot.rotate(initAng || 0);
+    };
+    
+	window.Rotatable = function Rotatable(img, initAng) {
+        var _hasLoaded = false,
+            _listeners = { ready: [] };
+        this.element = null;
+        
+        this.onReady = function onReady(listener) { 
+            if(_hasLoaded) { listener.call(rot); }
+            
+            _listeners.ready.push(listener);
+        };
+        
+        this.rotate = function preInitRotate(rad) { initAng = rad; }
+        
+        var rot = this;
+        $(img).load(function() { 
+            initRotatable(rot, img, initAng); 
+        
+            for(var i = 0; i < _listeners.ready.length; i++) {
+                _listeners.ready[i].call(rot);
+            }
+        
+            _hasLoaded = true;
+        });
+        img.src = ""; img.src = img.src; // Trigger onload handler if image is cached
+	};
+})();
+var rotatables = [];
+$("img")
+    .each(function() {
+        var rot = new Rotatable(this);
+        rotatables.push(rot);
+        
+        var img = this;
+        rot.onReady(function() { 
+            var $rot = $(rot.element); 
+            var halfSide = Math.sqrt(img.width * img.width + img.height * img.height) / 2;
+            
+            $rot.mousemove(function(e) {
+                var offset = $rot.offset();
+                var center = { x: offset.left + halfSide, y: offset.top + halfSide };
+                var vec = { x: e.pageX - center.x, y: e.pageY - center.y };
+                var angle = Math.PI - Math.atan2(vec.x, vec.y);
+                $("#angle").text(angle * 180 / Math.PI );
+                rot.rotate(angle);
+                
+                return false;
+            });
+        });
+    });
+</script>
+</body>
+</html>
